@@ -1,0 +1,146 @@
+<div class="max-w-4xl mx-auto bg-white p-8 rounded shadow">
+
+  <h1 class="text-3xl font-bold mb-6 text-center">Email Campaign Scheduler</h1>
+
+  <!-- Campaign Create Form -->
+  <form id="campaignForm" class="space-y-6 mb-10">
+    <!-- form fields as before -->
+    <div>
+      <label class="block mb-2 font-semibold">Title:</label>
+      <input type="text" name="title" required
+             class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+    </div>
+    <div>
+      <label class="block mb-2 font-semibold">Message:</label>
+      <textarea name="message" rows="4" required
+                class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+    </div>
+    <div>
+      <label class="block mb-2 font-semibold">Recipients (one email per line):</label>
+      <textarea id="recipientsInput" rows="4" placeholder="alice@example.com&#10;bob@example.com" required
+                class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+    </div>
+    <div>
+      <label class="block mb-2 font-semibold">Scheduled Time:</label>
+      <input type="datetime-local" name="scheduledTime" required
+             class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+    </div>
+    <button type="submit"
+            class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded transition duration-300">
+      Create Campaign
+    </button>
+  </form>
+
+  <hr class="my-8" />
+
+  <!-- Container for campaigns table -->
+  <h2 class="text-2xl font-semibold mb-4">All Campaigns</h2>
+  <div id="campaignsContainer">Loading campaigns...</div>
+</div>
+
+<script>
+  // Function to render campaigns table HTML from data
+  function renderCampaignsTable(campaigns) {
+    if (!campaigns.length) {
+      return '<p class="text-gray-600">No campaigns found.</p>';
+    }
+
+    let html = `
+      <div class="overflow-x-auto">
+        <table class="min-w-full border border-gray-300 rounded ">
+          <thead class="bg-gray-200 text-gray-700">
+            <tr>
+              <th class="py-3 px-4 border-b border-gray-300 text-left">Title</th>
+              <th class="py-3 px-4 border-b border-gray-300 text-left">Scheduled Time</th>
+              <th class="py-3 px-4 border-b border-gray-300 text-left">Status</th>
+              <th class="py-3 px-4 border-b border-gray-300 text-left">Recipients</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
+
+    campaigns.forEach(c => {
+
+      const scheduled = new Date(c.scheduledTime).toLocaleString();
+
+      const recipientsList = c.recipients.map(r => {
+        let colorClass = 'text-gray-700';
+        if (r.status === 'pending') colorClass = 'text-yellow-500';
+        else if (r.status === 'sent') colorClass = 'text-green-600';
+        else if (r.status === 'failed') colorClass = 'text-red-600';
+
+        return `<li><span>${r.email}</span> — <span class="font-mono text-sm ${colorClass}">${r.status}</span></li>`;
+      }).join('');
+
+      html += `
+        <tr class="hover:bg-gray-50">
+          <td class="py-3 px-4 border-b border-gray-300 align-top m-4">${c.title}</td>
+          <td class="py-3 px-4 border-b border-gray-300 align-top m-4">${scheduled}</td>
+          <td class="py-3 px-4 border-b border-gray-300 align-top m-4 capitalize font-semibold">${c.status}</td>
+          <td class="py-3 px-4 border-b border-gray-300 align-top ">
+            <ul class="list-disc list-inside space-y-1 max-h-40 overflow-auto m-4 text-amber-800">${recipientsList}</ul>
+          </td>
+        </tr>
+      `;
+    });
+
+    html += '</tbody></table></div>';
+    return html;
+  }
+
+  async function loadCampaigns() {
+    const container = document.getElementById('campaignsContainer');
+    container.innerHTML = 'Loading campaigns...';
+
+    try {
+      const res = await fetch('/api/campaigns');
+      if (!res.ok) throw new Error('Failed to fetch campaigns');
+      const campaigns = await res.json();
+
+      container.innerHTML = renderCampaignsTable(campaigns);
+    } catch (err) {
+      container.innerHTML = `<p class="text-red-600">Error loading campaigns: ${err.message}</p>`;
+    }
+  }
+
+  document.getElementById('campaignForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const form = e.target;
+    const title = form.title.value.trim();
+    const message = form.message.value.trim();
+    const scheduledTime = form.scheduledTime.value;
+
+    const emails = document.getElementById('recipientsInput').value
+      .split('\n')
+      .map(email => email.trim())
+      .filter(email => email.length > 0);
+
+    const recipients = emails.map(email => ({
+      email
+    }));
+
+    const payload = { title, message, recipients, scheduledTime };
+
+    try {
+      const res = await fetch('/api/campaigns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        alert('Campaign created successfully!');
+        form.reset();
+        loadCampaigns();
+      } else {
+        alert('Error: ' + (data.error || 'Unknown error'));
+      }
+    } catch (err) {
+      alert('Network error: ' + err.message);
+    }
+  });
+  loadCampaigns();
+</script>
